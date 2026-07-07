@@ -1,0 +1,202 @@
+<Window x:Class="TaskRecorder.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:TaskRecorder.ViewModels"
+        xmlns:m="clr-namespace:TaskRecorder.Models"
+        xmlns:converters="clr-namespace:TaskRecorder.Converters"
+        Title="TaskRecorder"
+        Width="1350" Height="600"
+        MinWidth="750" MinHeight="300"
+        WindowStartupLocation="CenterScreen"
+        Closing="Window_Closing"
+        Loaded="Window_Loaded">
+
+    <!-- DataContext set in code-behind constructor -->
+
+    <Window.Resources>
+        <converters:TimeDisplayConverter x:Key="TimeDisplayConverter"/>
+        <converters:CompletedStyleConverter x:Key="CompletedStyleConverter"/>
+        <converters:ConnectorVisibilityConverter x:Key="ConnectorVisibilityConverter"/>
+        <converters:BoolInverseConverter x:Key="BoolInverseConverter"/>
+        <converters:CompleteMenuHeaderConverter x:Key="CompleteMenuHeaderConverter"/>
+        <converters:CanAddSubtaskConverter x:Key="CanAddSubtaskConverter"/>
+        <converters:HasNotesConverter x:Key="HasNotesConverter"/>
+        <converters:RecentTaskBackgroundConverter x:Key="RecentTaskBackgroundConverter"/>
+        <converters:MilestoneOverdueConverter x:Key="MilestoneOverdueConverter"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Task list area -->
+        <ScrollViewer x:Name="MainScrollViewer" Grid.Row="0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+
+            <Grid>
+                <!-- Empty state -->
+                <TextBlock x:Name="EmptyPlaceholder"
+                           Text="没有任务。在下方输入以添加。"
+                           FontSize="16" Foreground="#999"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Visibility="Collapsed"/>
+
+                <ItemsControl x:Name="TaskListControl"
+                              ItemsSource="{Binding FilteredRows}">
+
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:TaskRowViewModel}">
+                        <!-- Row template defined inline -->
+                        <Border Margin="4,3" Padding="6,4"
+                                BorderBrush="#ccc" BorderThickness="0,0,0,1">
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Disabled"
+                                          PreviewMouseWheel="HorizontalScrollViewer_PreviewMouseWheel">
+                                <ItemsControl ItemsSource="{Binding FlatNodes}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:FlatNodeInfo}">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <!-- Task node box -->
+                                                <Border x:Name="NodeBorder" Margin="2"
+                                                        Padding="8,4"
+                                                        BorderThickness="1"
+                                                        CornerRadius="4"
+                                                        MouseDown="NodeBorder_MouseDown">
+                                                    <Border.BorderBrush>
+                                                        <Binding Converter="{StaticResource MilestoneOverdueConverter}"/>
+                                                    </Border.BorderBrush>
+                                                    <Border.Background>
+                                                        <MultiBinding Converter="{StaticResource RecentTaskBackgroundConverter}">
+                                                            <Binding Path="DataContext.IsHighlightRecent"
+                                                                     RelativeSource="{RelativeSource AncestorType=Window}"
+                                                                     FallbackValue="False"/>
+                                                            <Binding Path="Task.IsCompleted"/>
+                                                            <Binding Path="Task.CreatedAt"/>
+                                                            <Binding Path="Task.CompletedAt"/>
+                                                        </MultiBinding>
+                                                    </Border.Background>
+                                                    <Border.ContextMenu>
+                                                        <ContextMenu>
+                                                            <MenuItem Header="编辑" Click="EditMenuItem_Click"
+                                                                      Tag="{Binding}"
+                                                                      IsEnabled="{Binding Task.IsCompleted, Converter={StaticResource BoolInverseConverter}}"/>
+                                                            <MenuItem Header="Milestone" Click="MilestoneMenuItem_Click"
+                                                                      Tag="{Binding}"/>
+                                                            <MenuItem Header="{Binding Task.IsCompleted, Converter={StaticResource CompleteMenuHeaderConverter}}"
+                                                                      Click="CompleteMenuItem_Click"
+                                                                      Tag="{Binding}"/>
+                                                            <MenuItem Header="添加后置任务"
+                                                                      Click="AddSubtaskMenuItem_Click"
+                                                                      Tag="{Binding}"
+                                                                      IsEnabled="{Binding Task.IsCompleted, Converter={StaticResource BoolInverseConverter}}"/>
+                                                            <MenuItem Header="添加前置任务"
+                                                                      Click="AddParentTaskMenuItem_Click"
+                                                                      Tag="{Binding}"
+                                                                      IsEnabled="{Binding Task.IsCompleted, Converter={StaticResource BoolInverseConverter}}"/>
+                                                            <Separator/>
+                                                            <MenuItem Header="编辑补充信息"
+                                                                      Click="EditNotesMenuItem_Click"
+                                                                      Tag="{Binding}"/>
+                                                            <MenuItem Header="查看补充信息"
+                                                                      Click="ViewNotesMenuItem_Click"
+                                                                      Tag="{Binding}"
+                                                                      IsEnabled="{Binding Task.Notes, Converter={StaticResource HasNotesConverter}}"/>
+                                                            <Separator/>
+                                                            <MenuItem Header="删除" Click="DeleteMenuItem_Click"
+                                                                      Tag="{Binding}"/>
+                                                            <MenuItem Header="删除任务及子任务" Click="DeleteTaskAndSubtaskMenuItem_Click"
+                                                                      Tag="{Binding}"/>
+                                                            <Separator/>
+                                                            <MenuItem Header="添加到今日任务" Click="AddToTodayMenuItem_Click"
+                                                                      Tag="{Binding}"/>
+                                                        </ContextMenu>
+                                                    </Border.ContextMenu>
+                                                    <Border.InputBindings>
+                                                        <!-- Double-click handled via MouseDown event (Task 9) -->
+                                                    </Border.InputBindings>
+                                                    <StackPanel>
+                                                        <TextBlock x:Name="TitleText"
+                                                                   Text="{Binding Task.Title}"
+                                                                   FontSize="14"
+                                                                   TextDecorations="{Binding Task.IsCompleted, Converter={StaticResource CompletedStyleConverter}}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Task.IsCompleted}" Value="True">
+                                                                            <Setter Property="Foreground" Value="#999"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock x:Name="TimeText"
+                                                                   FontSize="11"
+                                                                   Foreground="#999"
+                                                                   Margin="0,2,0,0"
+                                                                   Text="{Binding Converter={StaticResource TimeDisplayConverter}, Mode=OneWay}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <!-- Arrow between nodes: parent → child -->
+                                                <Path Data="M0,6 L24,6 L24,1 L36,12 L24,23 L24,18 L0,18 Z"
+                                                      Fill="#b0b0b0"
+                                                      Width="36" Height="24"
+                                                      Stretch="None"
+                                                      VerticalAlignment="Center"
+                                                      Visibility="{Binding HasNext, Converter={StaticResource ConnectorVisibilityConverter}}"
+                                                      Margin="4,0,4,0"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Bottom input bar -->
+        <Border Grid.Row="1" BorderBrush="#ccc" BorderThickness="0,1,0,0"
+                Background="#f5f5f5" Padding="8,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="TaskInput" Grid.Column="0"
+                         VerticalContentAlignment="Center"
+                         KeyDown="TaskInput_KeyDown"/>
+                <Button Grid.Column="1" Content="添加" Width="60"
+                        Margin="8,0,0,0"
+                        Click="AddButton_Click"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0">
+                    <CheckBox Content="隐藏已完成"
+                              VerticalContentAlignment="Center"
+                              IsChecked="{Binding IsFilterCompleted}"/>
+                    <TextBlock Text="(" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                    <CheckBox Content="含子任务"
+                              VerticalContentAlignment="Center"
+                              IsChecked="{Binding IsFilterIncludeSubtasks}"
+                              IsEnabled="{Binding IsFilterCompleted}"/>
+                    <TextBlock Text=")" VerticalAlignment="Center"/>
+                    <CheckBox Content="高亮本周" Margin="12,0,0,0"
+                              VerticalContentAlignment="Center"
+                              IsChecked="{Binding IsHighlightRecent}"/>
+                    <Button Content="今日任务" Margin="12,0,0,0" Width="70"
+                            Click="TodayTasksButton_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
